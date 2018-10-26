@@ -1,0 +1,1120 @@
+LoginResponse = require '../lib/authentication/login_response'
+I18nConfigure = require '../lib/i18n/i18n_configure'
+
+module.exports = (robot) ->
+  switchBoard = robot.e.createDialog(robot)
+
+  if not robot.e
+    robot.logger.error 'hubot-enterprise not present, cannot run'
+    return
+
+  authMethod = (username, password) ->
+    return new Promise (resolve , reject) =>
+      robot.logger.info "Running the function : auth_method"
+      if username == 'admin' && password == 'Admin111'
+        resolve (new LoginResponse(200))
+      reject(new Error ('System error'))
+
+  # register integration
+  robot.e.registerIntegration {
+      shortDesc: "Admin module for hubot enterprise",
+      longDesc: "Admin module contain number of calls for Chat platform managing",
+      name: "super"
+    },{
+      adapter: 'basic_authentication_adapter',
+      HUBOT_DEFAULT_TOKEN_TTL: 60,
+      authMethod : authMethod
+    }
+  robot.logger.info ' slack super initialized'
+
+  #register some functions
+
+  #I8n
+  ###
+  robot.e.registerI18nApi({
+    integrationName: 'super',
+    prefix: 'super-',
+    defaultLocale: 'en',
+    locales: ['en', 'zh']
+  });
+  i18nt = new I18nConfigure(robot)
+  ###
+
+
+
+  #hello
+  hello_options =
+    integrationName: "super"
+    verb: "hello"
+    type: "respond"
+    help: "@botname hello"
+
+  say_hello = (msg) ->
+    robot.logger.info 'Saying Hello'
+    channel_id = msg.envelope.message.room
+
+    msg.send 'hello' + Date.now()
+
+  robot.e.hear hello_options, say_hello
+
+  #convert channel name to channel id
+  channel_id_name = (channel_name)->
+    robot.adapter.getChannels()
+    .then (channels) ->
+      target_chan = channels.find (chan) ->
+        #chan_name = '#' + chan.name
+        return chan.name == channel_name
+      if not target_chan
+        m = "I could not find channel #{channel_name}"
+        return Promise.reject(new Error m)
+      target_chan.id
+    .catch (e) ->
+      #return Promise.reject(new Error e.message)
+	  #giovanni
+      reply = "#{reply} because #{e.message} :disappointed:"
+      robot.logger.debug e
+      robot.logger.debug reply
+
+  #convert group name to group id
+  group_id_name = (group_name)->
+    robot.adapter.getPrivateChannels()
+    .then (groups) ->
+      target_group = groups.find (group) ->
+        return group.name == group_name
+      if not target_group
+        m = "I could not find group #{group_name}"
+        return Promise.reject(new Error m)
+      target_group.id
+    .catch (e) ->
+      reply = "#{reply} because #{e.message} :disappointed:"
+      robot.logger.debug e
+      robot.logger.debug reply
+
+  #convert user name to user id
+  user_id_name = (user_name)->
+    robot.adapter.getUsers()
+    .then (users) ->
+      target_user = users.find (user) ->
+        return user.name == user_name
+      if not target_user
+        m = "I could not find user #{user_name}"
+        return Promise.reject(new Error m)
+      target_user.id
+    .catch (e) ->
+      reply = "#{reply} because #{e.message} :disappointed:"
+      robot.logger.debug e
+      robot.logger.debug reply
+
+  #archiveChannel(channel_id)
+  archive_channel_options =
+    integrationName: "super"
+    verb: "archive"
+    entity: "channel"
+    #regex_suffix:{re: '([\\w\\d]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    entityDesc : "this is channel model"
+    help: "@botname super archive channel [channelname]"
+    type: "respond"
+    parameter: [{
+      name: "channel name",
+      desc: "the name of the channel, and make sure the channel is exist and not archived",
+      example: "demochannel"
+    }]
+
+  archive_channel = (msg) ->
+    robot.logger.info 'archive channel'
+    user_name = msg.message.user.name
+    regex = /^([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    channel_name = matches[1]
+    msg.reply "#{user_name}," +
+        "I am archiving channel for this team." +
+        " Please wait..."
+    channel_id_name(channel_name)
+    .then (channel_id) ->
+      robot.adapter.archiveChannel(channel_id)
+      .then () ->
+        robot.logger.debug "#{user_name},archive channel #{channel_name} successfully!"
+        msg.reply "#{user_name},archive channel #{channel_name} successfully!"
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to archive channel #{channel_name} because #{e.message} :disappointed:."
+    .catch (e) ->
+      reply = "#{user_name} it is failed to get channel_id because #{e.message} :disappointed:"
+      robot.logger.debug e
+      robot.logger.debug reply
+      msg.reply reply
+
+  robot.e.hear archive_channel_options, archive_channel
+
+  #archiveGroup(channel_id)
+  archive_group_options =
+    integrationName: "super"
+    verb: "archive"
+    entity: "group"
+    #regex_suffix:{re: '([\\w\\d]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    help: "@botname super archive group"
+    entityDesc : "this is group model"
+    type: "respond"
+    parameter: [{
+      name: "group name",
+      desc: "the name of the group, and make sure the group is exist and not archived",
+      example: "demogroup"
+    }]
+
+  archive_group = (msg) ->
+    robot.logger.info 'archive group'
+    user_name = msg.message.user.name
+    regex = /^([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    group_name = matches[1]
+    msg.reply "#{user_name}," +
+        "I am archiving group for this team." +
+        " Please wait..."
+    group_id_name(group_name)
+    .then (group_id) ->
+      robot.adapter.archivePrivateChannel(group_id)
+      .then () ->
+        robot.logger.debug "#{user_name},archive group #{group_name} successfully!"
+        msg.reply "#{user_name},archive group #{group_name} successfully!"
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to archive group #{group_name} because #{e.message} :disappointed:."
+    .catch (e) ->
+      reply = "#{user_name} it is failed to get group_id because #{e.message} :disappointed:"
+      robot.logger.debug e
+      robot.logger.debug reply
+      msg.reply reply
+
+  robot.e.hear archive_group_options, archive_group
+
+  #closeGroup(channel_id)
+  close_group_options =
+    integrationName: "super"
+    verb: "close"
+    entity: "group"
+    #regex_suffix:{re: '([\\w\\d]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    #regex_suffix:{re: '([\w\d-]+)', optional: false}
+    help: "@botname super close group"
+    type: "respond"
+    parameter: [{
+      name: "group name",
+      desc: "the name of the group, and make sure the group is exist and not archived",
+      example: "demogroup"
+    }]
+
+
+  close_group = (msg) ->
+    robot.logger.info 'close group'
+    user_name = msg.message.user.name
+    regex = /^([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    group_name = matches[1]
+    msg.reply "#{user_name}," +
+        "I am closing group for this team." +
+        " Please wait..."
+    group_id_name(group_name)
+    .then (group_id) ->
+      robot.adapter.closePrivateChannel(group_id)
+      .then () ->
+        robot.logger.debug "#{user_name},close group #{group_name} successfully!"
+        msg.reply "#{user_name},close group #{group_name} successfully!"
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to close group #{group_name} because #{e.message} :disappointed:."
+    .catch (e) ->
+      reply = "#{user_name} it is failed to get group_id because #{e.message} :disappointed:"
+      robot.logger.debug e
+      robot.logger.debug reply
+      msg.reply reply
+
+  robot.e.hear close_group_options, close_group
+
+  #createChannel(channel_name)
+  create_channel_options =
+    integrationName: "super"
+    verb: "create"
+    entity: "channel"
+    #regex_suffix:{re: '([\\w\\d]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    help: "@botname super create channel"
+    type: "respond"
+    parameter: [{
+      name: "channel name",
+      desc: "the name of the channel, and make sure the channel is exist and not archived",
+      example: "demochannel"
+    }]
+
+  create_channel = (msg) ->
+    robot.logger.info 'Create channel'
+    user_name = msg.message.user.name
+    regex = /^([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    channel_name = matches[1]
+    msg.reply "#{user_name}," +
+        "I am createing channel for this team." +
+        " Please wait..."
+    robot.adapter.createChannel(channel_name)
+    .then (a) ->
+      "create channel #{channel_name} successfully! :clap:"
+      msg.reply "#{user_name},create channel #{channel_name} successfully! :clap:"
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to create #{channel_name} because #{e.message} :disappointed:."
+
+  robot.e.hear create_channel_options, create_channel
+
+  #createGroup(channel_name)
+  create_group_options =
+    integrationName: "super"
+    verb: "create"
+    entity: "group"
+    #regex_suffix:{re: '([\\w\\d]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    help: "@botname super create group"
+    type: "respond"
+    parameter: [{
+      name: "group name",
+      desc: "the name of the group, and make sure the group is exist and not archived",
+      example: "demogroup"
+    }]
+
+  create_group = (msg) ->
+    robot.logger.info 'Create group'
+    user_name = msg.message.user.name
+    regex = /^([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    group_name = matches[1]
+    msg.reply "#{user_name}," +
+        "I am createing group for this team." +
+        " Please wait..."
+    robot.adapter.createPrivateChannel(group_name)
+    .then (group) ->
+      "create group #{group_name} successfully! :clap:"
+      msg.reply "#{user_name},create group #{group_name} successfully! :clap:"
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to create #{group_name} because #{e.message} :disappointed:."
+  robot.e.hear create_group_options, create_group
+
+  #pinMessage()
+  create_pin_options =
+    integrationName: "super"
+    verb: "create"
+    entity: "pin"
+    #regex_suffix:{re: '([\\w\\d]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    help: "@botname super create pin [channel name]"
+    entityDesc : "pin a message"
+    type: "respond"
+    parameter: [{
+      name: "cahnnel name",
+      desc: "the name of the channel, and make sure the channel is exist and not archived",
+      example: "demochannel"
+    }]
+
+  create_pin = (msg) ->
+    robot.logger.info 'create pin'
+    user_name = msg.message.user.name
+    regex = /^([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    channel_name = matches[1]
+    channel_id_name(channel_name)
+    .then (channel_id) ->
+      robot.adapter.getChannelMessages(channel_id)
+      .then (messages) ->
+        msgs = messages[0]
+        pin_options =
+          timestamp: msgs.messageId
+        robot.adapter.pinMessage(channel_id, pin_options)
+        .then (resp) ->
+          robot.logger.debug "#{user_name},create pin #{channel_name}'s #{msgs.text} successfully"
+          msg.reply "#{user_name},create pin #{channel_name}'s #{msgs.text} successfully"
+        .catch (e) ->
+          robot.logger.error e
+          msg.reply "Sorry #{user_name},it is failed to create pin because #{e.message} :disappointed:."
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to get #{channel_name}'s history because #{e.message} :disappointed:."
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to get #{channel_id} because #{e.message} :disappointed:."
+
+  robot.e.hear create_pin_options, create_pin
+
+  #getChannelMessages(channel_id)
+  get_channelmessage_options =
+    integrationName: "super"
+    verb: "get"
+    entity: "cmessage"
+    #regex_suffix:{re: '([\\w\\d]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    help: "@botname super get mchannel"
+    entityDesc : "get channel message"
+    type: "respond"
+    parameter: [{
+      name: "channel name",
+      desc: "the name of the channel, and make sure the channel is exist and not archived",
+      example: "demochannel"
+    }
+    ]
+
+  get_channelmessage = (msg) ->
+    robot.logger.info 'Get channel_message'
+    user_name = msg.message.user.name
+    regex = /^([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    channel_name = matches[1]
+    channel_id_name(channel_name)
+    .then (channel_id) ->
+      robot.adapter.getChannelMessages(channel_id)
+      .then (messages) ->
+        mm = "Found the following messages:\n"
+        mm = mm.concat(message.text + " " + message.attachments + " " + message.time + "\n") for message in messages
+        mm = mm.concat("All messages returned. :clap:")
+        msg.reply mm
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to get #{channel_name}'s message because #{e.message} :disappointed:."
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to get #{channel_id} because #{e.message} :disappointed:."
+  robot.e.hear get_channelmessage_options, get_channelmessage
+
+  #getChannels()
+  get_channel_options =
+    integrationName: "super"
+    verb: "get"
+    entity: "channels"
+    help: "@botname super get channels"
+    entityDesc : "list all the channels"
+    type: "respond"
+
+  get_channels = (msg) ->
+    robot.logger.info 'geting channels'
+    user_name = msg.message.user.name
+    msg.reply "#{user_name} " +
+        "I am retrieving all channels for this team." +
+        " Please wait..."
+    robot.adapter.getChannels()
+    .then (channels) ->
+      message = "Found the following channels:\n"
+      message = message.concat(channel.name + "\n") for channel in channels
+      message = message.concat("All channels returned. :clap:")
+      msg.reply message
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name}, there was an error, please try again."
+
+  robot.e.hear get_channel_options, get_channels
+
+  #getGroupMessages(channel_id)
+  get_groupmessage_options =
+    integrationName: "super"
+    verb: "get"
+    entity: "gmessage"
+    #regex_suffix:{re: '([\\w\\d]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    help: "@botname super get gmessage"
+    entityDesc : "get group message"
+    type: "respond"
+    parameter: [{
+      name: "group name",
+      desc: "the name of the group, and make sure the group is exist and not archived",
+      example: "demogroup"
+    }
+    ]
+
+  get_groupmessage = (msg) ->
+    robot.logger.info 'Get group_message'
+    user_name = msg.message.user.name
+    regex = /^([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    group_name = matches[1]
+    group_id_name(group_name)
+    .then (group_id) ->
+      robot.adapter.getPrivateChannelMessages(group_id)
+      .then (messages) ->
+        mm = "Found the following messages:\n"
+        mm = mm.concat(message.text + "\n") for message in messages
+        mm = mm.concat("All messages returned. :clap:")
+        msg.reply mm
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to get #{group_name}'s message because #{e.message} :disappointed:."
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to get #{group_id} because #{e.message} :disappointed:."
+  robot.e.hear get_groupmessage_options, get_groupmessage
+
+  #getGroups()
+  get_group_options =
+    integrationName: "super"
+    verb: "get"
+    entity: "groups"
+    help: "@botname super get groups"
+    entityDesc : "list all the groups"
+    type: "respond"
+
+  get_groups = (msg) ->
+    robot.logger.info 'geting groups'
+    user_name = msg.message.user.name
+    msg.reply "#{user_name} " +
+        "I am retrieving all groups for this team." +
+        " Please wait..."
+    robot.adapter.getPrivateChannels()
+    .then (groups) ->
+      message = "Found the following groups:\n"
+      message = message.concat(group.name + "\n") for group in groups
+      message = message.concat("All groups returned. :clap:")
+      msg.reply message
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name}, there was an error, please try again."
+
+  robot.e.hear get_group_options, get_groups
+
+  #getUsers()
+  get_user_options =
+    integrationName: "super"
+    verb: "get"
+    entity: "users"
+    help: "@botname super get users"
+    entityDesc : "list all the users"
+    type: "respond"
+
+  get_users = (msg) ->
+    robot.logger.info 'geting users'
+    user_name = msg.message.user.name
+    msg.reply "#{user_name} " +
+        "I am retrieving all users for this team." +
+        " Please wait..."
+    robot.adapter.getUsers()
+    .then (users) ->
+      message = "Found the following users:\n"
+      message = message.concat(user.name + " " + user.email + " " + "\n") for user in users
+      message = message.concat("All users returned. :clap:")
+      msg.reply message
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name}, there was an error, please try again."
+
+  robot.e.hear get_user_options, get_users
+
+  #inviteUserToChannel(channel_id, user_id)
+  invite_to_channel_options =
+    integrationName: "super"
+    verb: "invite"
+    entity: "uchannel"
+    regex_suffix:{re: '([\\w\\d]+)\\s+([\\S]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    help: "@bot:name super invite uchannel"
+    entityDesc : "invite user to channel"
+    type: "respond"
+    parameter: [{
+      name: "user name",
+      desc: "the name of the user, and make sure the user is exist",
+      example: "Alice"
+    },{
+      name: "channel name",
+      desc: "the name of the channel, and make sure the channel is exist and not archived",
+      example: "demochannel"
+    }
+    ]
+
+  invite_to_channel = (msg) ->
+    robot.logger.info 'invite user to channel'
+    regex = /(.*) ([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    user = msg.message.user.name
+    user_name = matches[1]
+    channel_name = matches[2]
+    channel_id_name(channel_name)
+    .then (channel_id) ->
+      robot.adapter.getUsers()
+      .then (users) ->
+        target_user = users.find (u) ->
+          return u.name == user_name
+        if not target_user
+          m = "I could not find user #{user_name}"
+          return Promise.reject(new Error m)
+        user_id = target_user.id
+        robot.adapter.inviteUserToChannel(channel_id,user_id)
+        .then () ->
+          robot.logger.debug "#{user},Invite #{user_name} to #{channel_name} successfully!"
+          msg.reply "#{user},Invite #{user_name} to #{channel_name} successfully!"
+        .catch (e) ->
+          robot.logger.error e
+          msg.reply "Sorry #{user},it is failed to invite #{user_name} to #{channel_name} because #{e.message} :disappointed:."
+    .catch (e) ->
+      reply = "#{user} it is failed to get channel_id because #{e.message} :disappointed:"
+      robot.logger.debug e
+      robot.logger.debug reply
+      msg.reply reply
+
+  robot.e.hear invite_to_channel_options, invite_to_channel
+
+  #inviteUserToGroup(channel_id, user_id)
+  invite_to_group_options =
+    integrationName: "super"
+    verb: "invite"
+    entity: "ugroup"
+    regex_suffix:{re: '([\\w\\d]+)\\s+([\\S]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    help: "@bot:name super invite ugroup"
+    entityDesc : "invite user to group"
+    type: "respond"
+    parameter: [{
+      name: "user name",
+      desc: "the name of the user, and make sure the user is exist",
+      example: "Alice"
+    },{
+      name: "group name",
+      desc: "the name of the group, and make sure the group is exist and not archived",
+      example: "demogroup"
+    }
+    ]
+
+  invite_to_group = (msg) ->
+    robot.logger.info 'invite user to group'
+    user = msg.message.user.name
+    regex = /(.*?) ([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    user_name = matches[1]
+    group_name = matches[2]
+    group_id_name(group_name)
+    .then (group_id) ->
+      robot.adapter.getUsers()
+      .then (users) ->
+        target_user = users.find (u) ->
+          return u.name == user_name
+        if not target_user
+          m = "I could not find user #{user_name}"
+          return Promise.reject(new Error m)
+        user_id = target_user.id
+        robot.adapter.inviteUserToPrivateChannel(group_id,user_id)
+        .then () ->
+          robot.logger.debug "#{user},Invite #{user_name} to #{group_name} successfully!"
+          msg.reply "#{user},Invite #{user_name} to #{group_name} successfully!"
+        .catch (e) ->
+          robot.logger.error e
+          msg.reply "Sorry #{user},it is failed to invite #{user_name} to #{group_name} because #{e.message} :disappointed:."
+    .catch (e) ->
+      reply = "#{user} it is failed to get group_id because #{e.message} :disappointed:"
+      robot.logger.debug e
+      robot.logger.debug reply
+      msg.reply reply
+
+  robot.e.hear invite_to_group_options, invite_to_group
+
+  #postMessage(channel_id, purpose)
+  post_message_options =
+    integrationName: "super"
+    verb: "post"
+    entity: "message"
+    #regex_suffix:{re: '([\\w\\d]+)\\s+([\\S]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    #regex_suffix:{re: '([^\\s]+)\\s+(.+)', optional: false}
+    #regex_suffix:{re: '([\\w\\d-]+) (.*)', optional: false}
+    help: "@botname super post message"
+    entityDesc : "post message to channel"
+    type: "respond"
+    parameter: [{
+      name: "channel name",
+      desc: "the name of the channel, and make sure the channel is exist and not archived",
+      example: "demochannel"
+    },{
+      name: "message",
+      desc: "the message you want to post to channel",
+      example: "hello world!"
+    }
+    ]
+
+  post_message = (msg) ->
+    robot.logger.info 'post message'
+    regex = /([\w\d-]+) (.*)/
+    matches = regex.exec(msg.match[1])
+    user_name = msg.message.user.name
+    channel_name = matches[1]
+    message = matches[2]
+    channel_id_name(channel_name)
+    .then (channel_id) ->
+      robot.adapter.postMessage(channel_id,message)
+      .then () ->
+        msg.reply "#{user_name},post message #{message} to #{channel_name} successfully! :clap:"
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to post message #{message} to #{channel_name}, because #{e.message} :disappointed:."
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to post message #{message} to #{channel_name}, because #{e.message} :disappointed:."
+  robot.e.hear post_message_options, post_message
+
+  #setChannelPurpose(channel_id, purpose)
+  set_channel_purpose_options =
+    integrationName: "super"
+    verb: "set"
+    entity: "pchannel"
+    #regex_suffix:{re: '([\\w\\d]+)\\s+([\\S]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    #regex_suffix:{re: '([^\\s]+)\\s+(.+)', optional: false}
+    help: "@botname super set pchannel"
+    entityDesc : "set channel purpose"
+    type: "respond"
+    parameter: [{
+      name: "channel name",
+      desc: "the name of the channel, and make sure the channel is exist and not archived",
+      example: "demochannel"
+    },{
+      name: "purpose",
+      desc: "the purpose of the channel",
+      example: "For test"
+    }
+    ]
+
+  set_channel_purpose = (msg) ->
+    robot.logger.info 'set channel_purpose'
+    regex = /([\w\d-]+) (.*)/
+    matches = regex.exec(msg.match[1])
+    user_name = msg.message.user.name
+    channel_name = matches[1]
+    channel_purpose = matches[2]
+    channel_id_name(channel_name)
+    .then (channel_id) ->
+      robot.adapter.setChannelPurpose(channel_id,channel_purpose)
+      .then () ->
+        robot.logger.debug "#{user_name},set #{channel_name}'s purpose successfully"
+        msg.reply "#{user_name},set #{channel_name}'s purpose successfully"
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to set #{channel_name}'s purpose because #{e.message} :disappointed:."
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to get #{channel_id} because #{e.message} :disappointed:."
+
+  robot.e.hear set_channel_purpose_options, set_channel_purpose
+
+  #setChannelTopic(channel_id, topic)
+  set_channel_topic_options =
+    integrationName: "super"
+    verb: "set"
+    entity: "tchannel"
+    #regex_suffix:{re: '([\\w\\d]+)\\s+([\\S]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    regex_suffix:{re: '([^\\s]+)\\s+(.+)', optional: false}
+    help: "@botname super set tchannel"
+    entityDesc : "Set channel topic"
+    type: "respond"
+    parameter: [{
+      name: "channel name",
+      desc: "the name of the channel, and make sure the channel is exist and not archived",
+      example: "demochannel"
+    },{
+      name: "topic",
+      desc: "the topic of the channel",
+      example: "testing"
+    }
+    ]
+
+  set_channel_topic = (msg) ->
+    robot.logger.info 'set channel topic'
+    regex = /([\w\d-]+) (.*)/
+    matches = regex.exec(msg.match[1])
+    user_name = msg.message.user.name
+    channel_name = matches[1]
+    channel_topic = matches[2]
+    channel_id_name(channel_name)
+    .then (channel_id) ->
+      robot.adapter.setChannelTopic(channel_id,channel_topic)
+      .then () ->
+        robot.logger.debug "#{user_name},set #{channel_name}'s topic successfully"
+        msg.reply "#{user_name},set #{channel_name}'s topic successfully"
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to set #{channel_name}'s topic because #{e.message} :disappointed:."
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to get #{channel_id} because #{e.message} :disappointed:."
+
+  robot.e.hear set_channel_topic_options, set_channel_topic
+
+  #setGroupPurpose(channel_id, purpose)
+  set_group_purpose_options =
+    integrationName: "super"
+    verb: "set"
+    entity: "pgroup"
+    #regex_suffix:{re: '([\\w\\d]+)\\s+([\\S]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    help: "@botname super set pgroup"
+    entityDesc : "set group purpose"
+    type: "respond"
+    parameter: [{
+      name: "group name",
+      desc: "the name of the group, and make sure the group is exist and not archived",
+      example: "demogroup"
+    },{
+      name: "purpose",
+      desc: "the purpose of the channel",
+      example: "For test"
+    }
+    ]
+
+  set_group_purpose = (msg) ->
+    robot.logger.info 'set group_purpose'
+    user_name = msg.message.user.name
+    regex = /([\w\d-]+) (.*)/
+    matches = regex.exec(msg.match[1])
+    group_name = matches[1]
+    group_purpose = matches[2]
+    group_id_name(group_name)
+    .then (group_id) ->
+      robot.adapter.setPrivateChannelPurpose(group_id,group_purpose)
+      .then () ->
+        robot.logger.debug "#{user_name},set #{group_name}'s purpose successfully"
+        msg.reply "#{user_name},set #{group_name}'s purpose successfully"
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to set #{group_name}'s purpose because #{e.message} :disappointed:."
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to get #{group_id} because #{e.message} :disappointed:."
+  robot.e.hear set_group_purpose_options, set_group_purpose
+
+  #setGroupTopic(channel_id, purpose)
+  set_group_topic_options =
+    integrationName: "super"
+    verb: "set"
+    entity: "tgroup"
+    #regex_suffix:{re: '([\\w\\d]+)\\s+([\\S]+)(?:\\s+on\\s+([\\w\\d]+))?', optional: false}
+    help: "@botname super set tgroup"
+    entityDesc : "set group topic"
+    type: "respond"
+    parameter: [{
+      name: "group name",
+      desc: "the name of the group, and make sure the group is exist and not archived",
+      example: "demogroup"
+    },{
+      name: "topic",
+      desc: "the topic of the channel",
+      example: "testing"
+    }
+    ]
+
+  set_group_topic = (msg) ->
+    robot.logger.info 'set group topic'
+    user_name = msg.message.user.name
+    regex = /([\w\d-]+) (.*)/
+    matches = regex.exec(msg.match[1])
+    group_name = matches[1]
+    group_topic = matches[2]
+    group_id_name(group_name)
+    .then (group_id) ->
+      robot.adapter.setPrivateChannelTopic(group_id,group_topic)
+      .then () ->
+        robot.logger.debug "#{user_name},set #{group_name}'s topic successfully"
+        msg.reply "#{user_name},set #{group_name}'s topic successfully"
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to set #{group_name}'s topic because #{e.message} :disappointed:."
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to get #{group_id} because #{e.message} :disappointed:."
+
+  robot.e.hear set_group_topic_options, set_group_topic
+
+  #command receiver
+  create_channel_c = (info, callback) ->
+    channelName = info.channel_name
+    info.adapter.createChannel(channelName)
+    .then (channel) ->
+      channel_id = channel.id
+      robot.logger.info 'id : ' + channel_id + '::name : ' + channelName
+      return Promise.resolve(200)
+      robot.logger.info "callback run success, we have create the channel: " + channelName
+    .catch (e) ->
+      return Promise.reject(201)
+      robot.logger.debug e
+
+  #register callback function for restAPI
+  robot.e.registerProductToBotCallback 'sm','createChannel',create_channel_c
+
+  #response rendering
+  renderTableOpts =
+    integrationName: "super"
+    verb: "run"
+    entity: "render"
+    type: "respond"
+    entityDesc : "default render"
+  renderTableOpts.help = "@botname #{renderTableOpts.integrationName} " +
+      "#{renderTableOpts.verb} #{renderTableOpts.entity}"
+
+  renderTable = (resp) ->
+    part1 = {
+      text: "this's text in part1 \n    this's line2 \n        \"line3\"",
+      title: "this's title",
+      color: "#f00000",
+      title_link: "https://www.baidu.com/",
+      pretext: "this's pretext",
+      image_url: "http://images4.fanpop.com/image/photos/21800000/thE-FACe-beautiful-pictures-21866603-500-500.jpg",
+      fallback: "this's fallback",
+      author_name: "this's author name",
+      author_icon: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQCBvCkI-RXwq4iD4BIkFAz-8kXyMKGedFgoMiVwYpfpKrm48PQ",
+      author_link: "http://www.hao123.com",
+      callback_id: "this's callback_id",
+      footer: "this's footer",
+      footer_icon: "http://ww1.sinaimg.cn/large/0067aHuWgw1esan2sozkej30m80m8gqx.jpg",
+      fields:
+        [
+          {
+            "title":"IM10008 - Printer Issue'",
+            "value":"Paperjam occurs when a printing job is larger than one page'",
+            "short":false
+          },
+          {
+            "title":"IncidentID",
+            "value":"IM10008",
+            "short":true
+          },
+          {
+            "title":"RequestedBy",
+            "value":"falcon",
+            "short":true
+          },
+          {
+            "title":"OpenTime",
+            "value":"2014-09-25T02:48:59+00:00",
+            "short":true
+          }
+        ]
+      ,actions:
+        [
+          {
+            "name": "game'",
+            "text": "Chess'",
+            "type": "button'",
+            "value": "chess'"
+          },
+          {
+            "name": "game'",
+            "text": "Falken's Maze",
+            "type": "button",
+            "value": "maze"
+          },
+          {
+            "name": "game",
+            "text": "Thermonuclear War",
+            "style": "danger",
+            "type": "button",
+            "value": "war",
+            "confirm": {
+                "title": "Are you sure?",
+                "text": "Wouldn't you prefer a good game of chess?",
+                "ok_text": "Yes",
+                "dismiss_text": "No"
+            }
+          }
+        ]
+	}
+
+
+    model =
+      text: "text in model'"
+      parts: [
+        part1
+      ]
+
+    # TODO: need to try a message object with pretext, image_url, author_*, fields, etc.
+    m = resp.robot.adapter.UnifiedResponseRenderer.createMessage model
+    robot.logger.info m
+    resp.send m, "this is a separate plain text message"
+  robot.e.hear renderTableOpts, renderTable
+
+  #response rendering - custormized template
+  #robot.adapter.loadMessageTemplates()
+  renderCusOpts =
+    integrationName: "super"
+    verb: "run"
+    entity: "crender"
+    type: "respond"
+    entityDesc : "customized render"
+  renderCusOpts.help = "@botname #{renderCusOpts.integrationName} " +
+      "#{renderCusOpts.verb} #{renderCusOpts.entity}"
+
+  renderCusTable = (resp) ->
+    part1 =
+      text: "this's text in part1 \n    this's line2 \n        \"line3\""
+      title: "this's title"
+      color: "#f00000"
+      title_link: "https://www.baidu.com/",
+      pretext: "this is pretext'"
+      image_url: "http://images4.fanpop.com/image/photos/21800000/thE-FACe-beautiful-pictures-21866603-500-500.jpg"
+      fallback: "this's fallback'"
+      author_name: "this is author name'"
+      author_icon: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQCBvCkI-RXwq4iD4BIkFAz-8kXyMKGedFgoMiVwYpfpKrm48PQ"
+      author_link: "http://www.hao123.com"
+      fields:
+        [
+          {
+            "title":"IM10008- Printer Issue'",
+            "value":"Paperjam occurs when a printing job is larger than one page'",
+            "short":false
+          },
+          {
+            "title":"IncidentID",
+            "value":"IM10008",
+            "short":true
+          },
+          {
+            "title":"RequestedBy",
+            "value":"falcon",
+            "short":true
+          },
+          {
+            "title":"OpenTime",
+            "value":"2014-09-25T02:48:59+00:00",
+            "short":true
+          }
+        ]
+
+    modelc =
+      text: "text in modelc'"
+      parts: [
+        part1
+      ]
+
+    confPath = "/home/chatopsbot/data/test-success.yml"
+    robot.adapter.loadMessageTemplates(confPath)
+    .then () ->
+      robot.logger.info "load message templates success"
+      mc = robot.adapter.UnifiedResponseRenderer.createMessage modelc, 'he.unified.incident'
+      robot.logger.info mc
+      resp.send mc, "this is a separate plain text message"
+    .catch (e) ->
+      robot.logger.error e
+  robot.e.respond renderCusOpts, renderCusTable
+
+
+  #postMessage render table
+  renderByPostMessageOptions =
+    integrationName: "super"
+    verb: "run"
+    entity: "prender"
+    type: "respond"
+    entityDesc : "attachment post by postMessage()"
+  renderByPostMessageOptions.help = "@botname #{renderByPostMessageOptions.integrationName} " +
+      "#{renderByPostMessageOptions.verb} #{renderByPostMessageOptions.entity}"
+
+  renderByPostMessage = (resp) ->
+    roomId = resp.envelope.room
+    part1 =
+      text: "this's text in part1 \n    this's line2 \n        \"line3\""
+      title: "this's title"
+      color: "#f00000"
+      title_link: "https://www.baidu.com/",
+      pretext: "this's pretext"
+      image_url: "http://images4.fanpop.com/image/photos/21800000/thE-FACe-beautiful-pictures-21866603-500-500.jpg"
+      fallback: "this's fallback"
+      author_name: "this's author name"
+      author_icon: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQCBvCkI-RXwq4iD4BIkFAz-8kXyMKGedFgoMiVwYpfpKrm48PQ"
+      author_link: "http://www.hao123.com"
+      fields:
+        [
+          {
+            "title":"IM10008- Printer Issue'",
+            "value":"\\\\?\\Volume{995d8fdc-0000-0000-0000-501f00000000}\\",
+            "short":false
+          },
+          {
+            "title":"\\\\IncidentID",
+            "value":"IM10008",
+            "short":true
+          },
+          {
+            "title":"RequestedBy",
+            "value":"falcon",
+            "short":true
+          },
+          {
+            "title":"OpenTime",
+            "value":"2014-09-25T02:48:59+00:00",
+            "short":true
+          }
+        ]
+
+    modelp =
+      text: "text in modelp'"
+      parts: [
+        part1
+      ]
+
+    mp = robot.adapter.UnifiedResponseRenderer.createMessage modelp
+    robot.logger.info mp
+    robot.adapter.postMessage roomId, mp
+  robot.e.respond renderByPostMessageOptions, renderByPostMessage
+
+  #setChannelLocale(channel_id, locale)
+  set_channel_locale_options =
+    integrationName: "super"
+    verb: "set"
+    entity: "lchannel"
+    help: "@botname super set lchannel"
+    entityDesc : "locale fo channel"
+    type: "respond"
+    parameter: [{
+      name: "channel name",
+      desc: "the name of the channel, and make sure the channel is exist and not archived",
+      example: "demochannel"
+    },{
+      name: "locale",
+      desc: "the locale of the channel",
+      example: "zh"
+    }
+    ]
+
+  set_channel_locale = (msg) ->
+    robot.logger.info 'set channel_locale'
+    regex = /([\w\d-]+) (.*)/
+    matches = regex.exec(msg.match[1])
+    user_name = msg.message.user.name
+    channel_name = matches[1]
+    channel_locale = matches[2]
+    channel_id_name(channel_name)
+    .then (channel_id) ->
+      robot.adapter.setChannelLocale(channel_id,channel_locale)
+      .then (locale) ->
+        robot.logger.debug "#{user_name},set #{channel_name}'s locale successfully"
+        msg.reply "#{user_name},set #{channel_name}'s locale successfully"
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to set #{channel_name}'s locale because #{e.message} :disappointed:."
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to get #{channel_id} because #{e.message} :disappointed:."
+
+  robot.e.hear set_channel_locale_options, set_channel_locale
+
+  #getChannelLocale(channel_id)
+  get_channellocale_options =
+    integrationName: "super"
+    verb: "get"
+    entity: "lchannel"
+    help: "@botname super get lchannel"
+    entityDesc : "locale fo channel"
+    type: "respond"
+    parameter: [{
+      name: "channel name",
+      desc: "the name of the channel, and make sure the channel is exist and not archived",
+      example: "demochannel"
+    }
+    ]
+
+  get_channellocale = (msg) ->
+    robot.logger.info 'Get channel_locale'
+    user_name = msg.message.user.name
+    regex = /^([\w\d-]+)/
+    matches = regex.exec(msg.match[1])
+    channel_name = matches[1]
+    channel_id_name(channel_name)
+    .then (channel_id) ->
+      robot.adapter.getChannelLocale(channel_id)
+      .then (r) ->
+        #msg.reply r.body
+        msg.reply r.body.message
+      .catch (e) ->
+        robot.logger.error e
+        msg.reply "Sorry #{user_name},it is failed to get #{channel_name}'s locale because #{e.message} :disappointed:."
+    .catch (e) ->
+      robot.logger.error e
+      msg.reply "Sorry #{user_name},it is failed to get #{channel_id} because #{e.message} :disappointed:."
+  robot.e.hear get_channellocale_options, get_channellocale
+
+
+

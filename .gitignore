@@ -1,0 +1,13 @@
+config/*
+.idea/
+!config/default.*
+npm-debug.log
+package-lock.json
+node_modules
+coverage
+*.log
+certs/
+*.rpm
+coverage
+logs/
+log/
